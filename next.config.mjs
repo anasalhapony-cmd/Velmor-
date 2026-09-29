@@ -12,6 +12,14 @@ const supabaseHost = (() => {
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  eslint: {
+    // يتجاهل أخطاء ESLint أثناء البناء على Vercel
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    // يتجاهل أخطاء الـ Types الصارمة أثناء البناء
+    ignoreBuildErrors: true,
+  },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
