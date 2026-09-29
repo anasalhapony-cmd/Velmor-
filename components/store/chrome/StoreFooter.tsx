@@ -59,7 +59,9 @@ export async function StoreFooter() {
         <p>
           © {new Date().getFullYear()} VELMOR · <span dir="ltr">Elegance with attitude</span>
         </p>
-        <p>الدفع عند الاستلام · توصيل منزلي</p>
+        <p>
+          صمم من قبل استوديو شبكة · <a href="tel:0934341814" dir="ltr" className="hover:underline">0934341814</a>
+        </p>
       </div>
     </footer>
   );
