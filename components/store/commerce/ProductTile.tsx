@@ -6,6 +6,7 @@ import { AddToBag, unitAr } from '@/components/store/commerce/AddToBag';
 import { WishButton } from '@/components/store/commerce/WishButton';
 import { PriceTag, discountLabel } from '@/components/store/ui';
 import type { ProductCard } from '@/types';
+import { Photo } from '@/components/store/photo';
 
 /**
  * The approved discovery card: art-directed field, bottle, tilt + glare
@@ -41,8 +42,14 @@ export function ProductTile({
     >
       <Link href={`/products/${product.slug}`} className="vp-pcard__media" data-transition aria-label={name} tabIndex={-1}>
         {product.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.image} alt={name} width={700} height={940} loading={priority ? 'eager' : 'lazy'} decoding="async" />
+          <Photo
+            src={product.image}
+            alt={name}
+            width={700}
+            height={940}
+            sizes="(max-width: 899px) 270px, 490px"
+            loading={priority ? 'eager' : 'lazy'}
+          />
         ) : (
           <span className="vp-pcard__placeholder" aria-hidden="true">
             {product.name}

@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/utils/money';
 import { Icon } from '@/components/store/ui';
 import { unitAr } from '@/components/store/commerce/AddToBag';
 import { MAX_QTY_PER_LINE } from '@/config/constants';
+import { Photo } from '@/components/store/photo';
 
 export function CartView() {
   const items = useCart((s) => s.items);
@@ -61,8 +62,7 @@ export function CartView() {
               <li key={it.variantId} className={bad ? 'is-bad' : ''}>
                 <Link href={`/products/${it.slug}`} className="vp-cart__img" tabIndex={-1}>
                   {it.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={it.image} alt="" width={120} height={160} />
+                    <Photo src={it.image} alt="" width={120} height={160} sizes="120px" />
                   ) : null}
                 </Link>
                 <div className="vp-cart__meta">

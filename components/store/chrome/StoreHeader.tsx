@@ -7,6 +7,7 @@ import { useCart } from '@/stores/cart-store';
 import { useWishlist } from '@/stores/wishlist-store';
 import { Icon } from '@/components/store/ui';
 import { formatPrice } from '@/lib/utils/money';
+import { Photo } from '@/components/store/photo';
 
 const NAV = [
   { href: '/products', label: 'العطور' },
@@ -188,8 +189,7 @@ export function StoreHeader({
           </ol>
           <div className="vp-menu__aside">
             {menuImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={menuImage} alt="" width={380} height={514} loading="lazy" />
+              <Photo src={menuImage} alt="" width={380} height={514} sizes="350px" />
             ) : null}
             <p>الدفع عند الاستلام · {deliveryLine}</p>
           </div>
@@ -233,8 +233,7 @@ export function StoreHeader({
             <li key={h.id}>
               <Link href={`/products/${h.slug}`} tabIndex={searchOpen ? 0 : -1}>
                 {h.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={h.image} alt="" width={56} height={76} loading="lazy" />
+                  <Photo src={h.image} alt="" width={56} height={76} sizes="56px" />
                 ) : (
                   <span className="vp-search__ph" />
                 )}

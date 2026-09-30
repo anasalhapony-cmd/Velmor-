@@ -53,7 +53,7 @@ cp .env.example .env.local     # then fill in the values (see below)
 The schema lives in `supabase/migrations/` (ordered, reproducible). Apply it to your Supabase DB:
 
 ```bash
-npm run db:migrate      # applies 0001 … 0021 (tracked in schema_migrations; safe to re-run)
+npm run db:migrate      # applies 0001 … 0022 (tracked in schema_migrations; safe to re-run)
 npm run db:seed         # DEV sample catalogue — REQUIRED to see the homepage as designed (5 perfumes, families, copy)
 ```
 
@@ -67,6 +67,7 @@ npm run db:seed         # DEV sample catalogue — REQUIRED to see the homepage 
 | `0017` | adds the `admin` role (must run in its own transaction) |
 | `0018` | Phase 2 commerce: stock reservations, status state machine + history, auto-expiry, gift-wrap architecture (off), `create_order` v3 (anti-hoarding caps, zone-derived city, advisory-locked idempotency), `quote_order_v2`, durable rate limits, catalogue browse v2, design homepage sections |
 | `0019` | **privilege lockdown** — revokes Supabase's default EXECUTE/ALL grants and re-grants an explicit allowlist (mandatory) |
+| `0022` | creates the public `product-images` storage bucket (5 MB, images only) |
 | `0021` | storefront copy setting (`delivery_tagline`, approved wording) |
 | `0020` | **RLS per permission** — staff JWTs can only write the tables their permission owns; ledgers are RPC-only; prices need `manage_prices`; stock changes only via the ledger |
 
@@ -96,9 +97,25 @@ Then sign in at **`/admin/login`**.
 The admin image uploader (`/api/admin/upload`) stores files in a Supabase Storage bucket named
 **`product-images`**. Create it once:
 
-- Supabase → Storage → **New bucket** → name `product-images`, **Public** = on.
+- Created automatically by migration `0022` (and, as a fallback, by the uploader on first use).
+  Manual alternative: Supabase → Storage → **New bucket** → name `product-images`, **Public** = on.
 - Public read is enough for the storefront; uploads happen server-side with the service role, so no
   extra write policy is required. (You can also add product images by external URL from the editor.)
+
+## 4a. Performance on phones
+
+- **Test a production build, not `npm run dev`.** The dev server ships the unminified
+  React development build, recompiles on demand and keeps an HMR socket open — on a
+  phone it is several times slower than the real site. Judge speed with
+  `npm run build && npm run start` (or a Vercel deployment).
+- **Product photos are resized automatically.** Every product/editorial image goes
+  through `components/store/photo.tsx` → Next's image optimiser (WebP, sized to the
+  width the layout needs), so a 5 MB phone photo reaches a phone as a small file. The
+  first request of each size is encoded on demand and then cached. If a photo does not
+  show locally, run `npm i sharp` and restart. Still upload reasonably sized photos
+  (about 1200–1600 px on the long side) — it keeps the first load fast.
+- The motion engine sleeps when nothing is moving and batches layout reads before
+  style writes; `prefers-reduced-motion` still disables motion completely.
 
 ## 4b. Scheduled job — expire stale COD orders
 

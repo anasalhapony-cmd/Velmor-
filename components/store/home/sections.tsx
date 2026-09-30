@@ -12,6 +12,7 @@ import { formatPrice } from '@/lib/utils/money';
 import { whatsappUrl } from '@/lib/utils/format';
 import { AddToBag } from '@/components/store/commerce/AddToBag';
 import { Icon, Letters, Pips, PriceTag, Words, cv } from '@/components/store/ui';
+import { Photo } from '@/components/store/photo';
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -71,8 +72,7 @@ export function HeroSection({ block, fallbackImage }: { block?: CmsBlockRow; fal
         </div>
         <div className="vp-hero__bottle" aria-hidden="true">
           <div className="vp-hero__bottle-mouse">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={image} alt="" width={1035} height={1400} fetchPriority="high" decoding="async" />
+            <Photo src={image} alt="" width={1035} height={1400} sizes="(max-width: 899px) 340px, 30vw" priority />
             <span className="vp-hero__shadow" />
           </div>
         </div>
@@ -223,8 +223,7 @@ function RailCard({ p, index }: { p: ProductDetail; index: number }) {
           {shortName(p)}
         </span>
         {img ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img className="vp-rcard__img" src={img} alt={name} width={700} height={940} loading="lazy" decoding="async" />
+          <Photo className="vp-rcard__img" src={img} alt={name} width={700} height={940} sizes="290px" />
         ) : null}
       </div>
       <footer className="vp-rcard__body">
@@ -428,8 +427,7 @@ export function SignatureSection({ product, block }: { product: ProductDetail | 
         </div>
         {img ? (
           <div className="vp-sig__bottle" aria-hidden="true">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img} alt="" width={1035} height={1400} loading="lazy" decoding="async" />
+            <Photo src={img} alt="" width={1035} height={1400} sizes="(max-width: 899px) 240px, 560px" />
           </div>
         ) : null}
         <ol className="vp-sig__rail" aria-hidden="true">
@@ -528,8 +526,7 @@ export function LifestyleSection({ block, image }: { block?: CmsBlockRow; image:
         </span>
         {img ? (
           <div className="vp-life__visual" data-reveal="img">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={img} alt="" width={1400} height={1209} loading="lazy" decoding="async" data-parallax="-0.06" />
+            <Photo src={img} alt="" width={1400} height={1209} sizes="(max-width: 899px) 92vw, 580px" data-parallax="-0.06" />
           </div>
         ) : null}
         <div className="vp-life__card" data-parallax="0.1" aria-hidden="true">

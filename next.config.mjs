@@ -21,7 +21,15 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    formats: ['image/avif', 'image/webp'],
+    // WebP only: AVIF saves a few % more but costs far more CPU to encode on the
+    // first request and to decode on low-end phones.
+    formats: ['image/webp'],
+    // Widths the optimiser may produce (the Photo component's `sizes` picks from
+    // these). Smaller than Next's defaults at the top end: no 2048/3840 files.
+    deviceSizes: [640, 828, 1080, 1440, 1920],
+    imageSizes: [48, 64, 96, 128, 256, 384],
+    // Uploaded images have unique, immutable names — cache the variants a month.
+    minimumCacheTTL: 60 * 60 * 24 * 30,
     remotePatterns: [
       // Supabase Storage public bucket for product/brand imagery.
       ...(supabaseHost

@@ -19,7 +19,7 @@ const reem = Reem_Kufi({
 
 const plexArabic = IBM_Plex_Sans_Arabic({
   subsets: ['arabic', 'latin'],
-  weight: ['300', '400', '500', '600', '700'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-plex-ar',
   display: 'swap',
 });

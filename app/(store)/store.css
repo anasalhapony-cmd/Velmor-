@@ -5178,3 +5178,22 @@ body {
 .vp-reviews__stage {
   min-height: clamp(16rem, 33vw, 30rem);
 }
+
+/* ------------------------------------------------------------------
+   Phone performance (no visual change to the approved design)
+   ------------------------------------------------------------------ */
+/* Hero grain: on desktop it is 4× the screen (inset -50%) and drifts forever.
+   On a phone that is a ~10-megapixel layer that never stops repainting. Keep
+   the same texture at screen size and let it sit still — at 8 % opacity the
+   drift is imperceptible, the memory and compositing cost is not. */
+@media (max-width: 899px), (hover: none) {
+  .vp-hero__grain {
+    inset: 0;
+    animation: none;
+  }
+  /* On touch the rail is a native swipe scroller: its track is never
+     transformed, so it must not be promoted to a (2000 px+ wide) layer. */
+  .vp-rail:not([data-pinned]) .vp-rail__track {
+    will-change: auto;
+  }
+}

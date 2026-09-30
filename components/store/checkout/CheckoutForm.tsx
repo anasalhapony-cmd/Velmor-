@@ -12,6 +12,7 @@ import { trackEvent } from '@/lib/analytics/client';
 import { Icon } from '@/components/store/ui';
 import { unitAr } from '@/components/store/commerce/AddToBag';
 import type { Quote } from '@/types';
+import { Photo } from '@/components/store/photo';
 
 interface Zone {
   id: string;
@@ -291,8 +292,7 @@ export function CheckoutForm({ zones, giftWrapEnabled }: { zones: Zone[]; giftWr
           {items.map((it) => (
             <li key={it.variantId} className={unavailable.has(it.variantId) ? 'is-bad' : ''}>
               {it.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={it.image} alt="" width={48} height={64} />
+                <Photo src={it.image} alt="" width={48} height={64} sizes="48px" />
               ) : (
                 <span className="vp-co__ph" />
               )}

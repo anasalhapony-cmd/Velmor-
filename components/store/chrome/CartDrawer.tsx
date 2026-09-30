@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/utils/money';
 import { Icon } from '@/components/store/ui';
 import { unitAr } from '@/components/store/commerce/AddToBag';
 import { MAX_QTY_PER_LINE } from '@/config/constants';
+import { Photo } from '@/components/store/photo';
 
 export function CartDrawer() {
   const items = useCart((s) => s.items);
@@ -73,8 +74,7 @@ export function CartDrawer() {
                   <li key={it.variantId} className={bad ? 'is-bad' : ''}>
                     <Link href={`/products/${it.slug}`} onClick={close} className="vp-drawer__img" tabIndex={-1}>
                       {it.image ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={it.image} alt="" width={72} height={96} loading="lazy" />
+                        <Photo src={it.image} alt="" width={72} height={96} sizes="72px" />
                       ) : null}
                     </Link>
                     <div className="vp-drawer__meta">

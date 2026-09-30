@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { AddToBag } from '@/components/store/commerce/AddToBag';
 import { Icon, PriceTag, cv } from '@/components/store/ui';
 import type { FinderAnswers, FinderResult } from '@/types';
+import { Photo } from '@/components/store/photo';
 
 type Opt = { label: string; apply: Partial<FinderAnswers> };
 type Question = { key: string; q: string; options: Opt[] };
@@ -218,8 +219,13 @@ export function FinderExperience({
                 <div className={`vp-match vp-field--${best.product.artField ?? 'ink'}`}>
                   <Link href={`/products/${best.product.slug}`} className="vp-match__img" data-transition data-cursor="اكتشف">
                     {best.product.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={best.product.image} alt={best.product.nameAr || best.product.name} width={400} height={540} />
+                      <Photo
+                        src={best.product.image}
+                        alt={best.product.nameAr || best.product.name}
+                        width={400}
+                        height={540}
+                        sizes="(max-width: 899px) 92vw, 400px"
+                      />
                     ) : null}
                   </Link>
                   <div className="vp-match__body">
@@ -259,8 +265,7 @@ export function FinderExperience({
                     {others.map((r) => (
                       <Link key={r.product.id} href={`/products/${r.product.slug}`} data-transition>
                         {r.product.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={r.product.image} alt="" width={80} height={108} loading="lazy" />
+                          <Photo src={r.product.image} alt="" width={80} height={108} sizes="80px" />
                         ) : null}
                         <span>
                           <b>{r.product.nameAr || r.product.name}</b>

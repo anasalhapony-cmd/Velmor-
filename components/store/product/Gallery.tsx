@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { ArtField } from '@/types';
+import { Photo } from '@/components/store/photo';
 
 /** PDP gallery on the product's art-direction field; tilt/glare from the engine. */
 export function Gallery({
@@ -23,8 +24,16 @@ export function Gallery({
         {word}
       </span>
       {current ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img key={current.url} className="vp-gal__img" src={current.url} alt={current.alt || name} width={1035} height={1400} fetchPriority="high" />
+        <Photo
+          key={current.url}
+          className="vp-gal__img"
+          src={current.url}
+          alt={current.alt || name}
+          width={1035}
+          height={1400}
+          sizes="(max-width: 899px) 92vw, 480px"
+          priority
+        />
       ) : (
         <span className="vp-gal__ph">{name}</span>
       )}
@@ -41,8 +50,7 @@ export function Gallery({
               className={j === i ? 'is-on' : ''}
               onClick={() => setI(j)}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={img.url} alt="" width={64} height={86} loading="lazy" />
+              <Photo src={img.url} alt="" width={64} height={86} sizes="64px" />
             </button>
           ))}
         </div>

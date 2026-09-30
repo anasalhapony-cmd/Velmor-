@@ -7,6 +7,7 @@ import { whatsappUrl } from '@/lib/utils/format';
 import { ORDER_STATUS_LABELS_AR } from '@/config/constants';
 import { Icon } from '@/components/store/ui';
 import type { OrderPublic } from '@/types';
+import { Photo } from '@/components/store/photo';
 
 /** Order confirmation — the final frame. Data is the server's own response. */
 export function SuccessView({ whatsapp }: { whatsapp: string }) {
@@ -96,8 +97,7 @@ export function SuccessView({ whatsapp }: { whatsapp: string }) {
             {order.items.map((it, i) => (
               <li key={i}>
                 {it.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={it.image} alt="" width={52} height={70} />
+                  <Photo src={it.image} alt="" width={52} height={70} sizes="52px" />
                 ) : (
                   <span className="vp-co__ph" />
                 )}
