@@ -678,4 +678,183 @@ begin
   raise notice 'PART 8 (anti-hoarding): ALL ASSERTIONS PASSED';
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- PART 9 — permanent product deletion (0023)
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  v_owner uuid; v_mgr uuid; v_adm uuid; v_zone uuid;
+  v_p uuid; v_pkeep uuid; v_va uuid; v_vb uuid; v_vk uuid; v_c uuid;
+  v_ord jsonb; v_oid uuid; v_total numeric; v_res jsonb; v_detail text; v_t uuid;
+begin
+  select id into v_owner from admin_users where role = 'owner' limit 1;
+  select id into v_zone from delivery_zones where active limit 1;
+  insert into auth.users (id, email) values (gen_random_uuid(), 'delmgr@velmor.ly') returning id into v_mgr;
+  insert into admin_users (id, full_name, role, permissions, active)
+    values (v_mgr, 'DelMgr', 'manager', array['manage_products','manage_inventory'], true);
+  insert into auth.users (id, email) values (gen_random_uuid(), 'deladm@velmor.ly') returning id into v_adm;
+  insert into admin_users (id, full_name, role, active) values (v_adm, 'DelAdm', 'admin', true);
+
+  -- the perfume to delete (with every kind of child row) + one that must survive
+  insert into products (slug, name, name_ar, active) values ('del-me', 'DELETE ME', 'عطر الحذف', true) returning id into v_p;
+  insert into products (slug, name, name_ar, active) values ('keep-me', 'KEEP ME', 'عطر يبقى', true) returning id into v_pkeep;
+  insert into product_variants (product_id, size, unit, price, stock_quantity) values (v_p, 50, 'ml', 100, 10) returning id into v_va;
+  insert into product_variants (product_id, size, unit, price, stock_quantity) values (v_p, 100, 'ml', 180, 10) returning id into v_vb;
+  insert into product_variants (product_id, size, unit, price, stock_quantity) values (v_pkeep, 50, 'ml', 90, 10) returning id into v_vk;
+  insert into product_images (product_id, url, is_primary, sort_order) values (v_p, 'https://x/del-1.jpg', true, 0), (v_p, 'https://x/del-2.jpg', false, 1);
+  insert into reviews (product_id, rating, display_name, status) values (v_p, 5, 'ع', 'APPROVED');
+  insert into wishlist_items (device_id, product_id) values ('dev-del', v_p);
+  insert into coupons (code, type, value) values ('DELTEST', 'PERCENTAGE', 5) returning id into v_c;
+  insert into coupon_products (coupon_id, product_id) values (v_c, v_p);
+  perform adjust_inventory(v_va, 5, 'RESTOCK', null, null, 'seed ledger');
+  update site_settings set value = '"del-me"' where key = 'home_signature_product';
+
+  -- ---- privileges: callable by signed-in users (self-guarding), never by anon ----
+  assert not has_function_privilege('anon', 'admin_delete_product(uuid,text)', 'execute'), 'anon must not execute admin_delete_product';
+  assert has_function_privilege('authenticated', 'admin_delete_product(uuid,text)', 'execute'), 'authenticated may call the self-guarding RPC';
+
+  -- ---- anon: refused at the privilege layer ----
+  perform set_config('request.jwt.claim.sub', '', true);
+  set local role anon;
+  begin
+    perform admin_delete_product(v_p, 'عطر الحذف');
+    assert false, 'anon must not delete products';
+  exception when insufficient_privilege then null;
+  end;
+  reset role;
+
+  -- ---- signed in but not an admin ----
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_p, 'عطر الحذف');
+    assert false, 'non-admin must not delete products';
+  exception when others then
+    assert sqlerrm = 'NOT_AUTHORIZED', 'non-admin: ' || sqlerrm;
+  end;
+  reset role;
+
+  -- ---- manager WITH manage_products can archive but not destroy ----
+  perform set_config('request.jwt.claim.sub', v_mgr::text, true);
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_p, 'عطر الحذف');
+    assert false, 'manager must not permanently delete';
+  exception when others then
+    assert sqlerrm = 'NOT_AUTHORIZED', 'manager: ' || sqlerrm;
+  end;
+  reset role;
+
+  -- ---- admin: wrong / empty confirmation name is refused, nothing deleted ----
+  perform set_config('request.jwt.claim.sub', v_adm::text, true);
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_p, 'اسم آخر');
+    assert false, 'wrong confirmation name must be refused';
+  exception when others then
+    assert sqlerrm = 'CONFIRMATION_MISMATCH', 'wrong name: ' || sqlerrm;
+  end;
+  begin
+    perform admin_delete_product(v_p, '   ');
+    assert false, 'blank confirmation must be refused';
+  exception when others then
+    assert sqlerrm = 'CONFIRMATION_MISMATCH', 'blank name: ' || sqlerrm;
+  end;
+  reset role;
+  assert exists (select 1 from products where id = v_p), 'product must survive a refused delete';
+
+  -- ---- an open order blocks the deletion (customer is still owed the perfume) ----
+  v_ord := create_order(jsonb_build_object(
+      'customer_name','حذف','phone','218955500001','address','عنوان','delivery_zone_id', v_zone,
+      'items', jsonb_build_array(jsonb_build_object('variant_id', v_va, 'quantity', 2))), 'del-test-1');
+  select id, total into v_oid, v_total from orders where public_order_number = v_ord->>'order_number';
+
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_p, 'عطر الحذف');
+    assert false, 'open order must block deletion';
+  exception when others then
+    get stacked diagnostics v_detail = pg_exception_detail;
+    assert sqlerrm = 'HAS_OPEN_ORDERS', 'open order: ' || sqlerrm;
+    assert v_detail = '1', 'open order count in detail, got ' || coalesce(v_detail, 'null');
+  end;
+  reset role;
+  assert exists (select 1 from products where id = v_p)
+     and (select count(*) from product_variants where product_id = v_p) = 2, 'nothing may be removed while blocked';
+
+  -- ---- order delivered → deletion allowed ----
+  perform set_config('request.jwt.claim.sub', v_owner::text, true);
+  perform admin_update_order_status(v_oid, 'CONFIRMED');
+  perform admin_update_order_status(v_oid, 'DELIVERED', 'test', true);
+  perform set_config('request.jwt.claim.sub', v_adm::text, true);
+  assert (select coalesce(sum(reserved_quantity), 0) from product_variants where product_id = v_p) = 0, 'no stock left reserved';
+
+  set local role authenticated;
+  v_res := admin_delete_product(v_p, '  عطر   الحذف ');           -- extra spaces tolerated
+  reset role;
+
+  assert v_res->>'slug' = 'del-me' and v_res->>'name' = 'عطر الحذف', 'returns slug + name';
+  assert jsonb_array_length(v_res->'images') = 2, 'returns the image URLs for storage cleanup';
+  assert (v_res->'counts'->>'reviews')::int = 1 and (v_res->'counts'->>'wishlist_items')::int = 1, 'returns child counts';
+
+  -- removed
+  assert not exists (select 1 from products where id = v_p), 'product removed';
+  assert not exists (select 1 from product_variants where id in (v_va, v_vb)), 'sizes removed';
+  assert not exists (select 1 from product_images where product_id = v_p), 'images removed';
+  assert not exists (select 1 from reviews where product_id = v_p), 'reviews removed';
+  assert not exists (select 1 from wishlist_items where product_id = v_p), 'wishlist entries removed';
+  assert not exists (select 1 from coupon_products where product_id = v_p), 'coupon scope removed';
+  assert not exists (select 1 from inventory_movements where variant_id in (v_va, v_vb)), 'ledger of its sizes removed';
+  assert (select value from site_settings where key = 'home_signature_product') = '""'::jsonb, 'homepage pointer cleared';
+  assert position('del-me' in list_products('{}'::jsonb, 'recommended', 100, 0)::text) = 0, 'storefront listing no longer returns it';
+
+  -- kept: the order, untouched, with its snapshot
+  assert exists (select 1 from orders where id = v_oid and total = v_total and order_status = 'DELIVERED'), 'order kept, total unchanged';
+  assert exists (select 1 from order_items where order_id = v_oid and product_id is null and variant_id is null
+                    and product_name_snapshot is not null and unit_price_snapshot = 100 and quantity = 2), 'order line kept with snapshot, links nulled';
+  -- kept: other products and the coupon itself
+  assert exists (select 1 from products where id = v_pkeep) and exists (select 1 from product_variants where id = v_vk), 'other products untouched';
+  assert exists (select 1 from coupons where id = v_c), 'coupon itself kept';
+
+  -- audit trail
+  assert exists (select 1 from admin_audit_logs
+                  where action = 'delete' and entity = 'products' and entity_id = v_p::text and admin_id = v_adm
+                    and previous_value->>'slug' = 'del-me'
+                    and jsonb_array_length(previous_value->'variants') = 2
+                    and jsonb_array_length(previous_value->'images') = 2
+                    and reason = 'permanent_delete'), 'audit entry with a full snapshot';
+
+  -- deleting again → not found
+  perform set_config('request.jwt.claim.sub', v_adm::text, true);
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_p, 'عطر الحذف');
+    assert false, 'second delete must report not found';
+  exception when others then
+    assert sqlerrm = 'PRODUCT_NOT_FOUND', 'second delete: ' || sqlerrm;
+  end;
+  reset role;
+
+  -- ---- name matching: Latin name, any case; an empty name_ar can never be matched by '' ----
+  insert into products (slug, name, name_ar, active) values ('tmp-latin', 'Tmp Perfume', null, true) returning id into v_t;
+  insert into product_variants (product_id, size, unit, price, stock_quantity) values (v_t, 50, 'ml', 50, 1);
+  set local role authenticated;
+  v_res := admin_delete_product(v_t, ' tmp   PERFUME');
+  reset role;
+  assert not exists (select 1 from products where id = v_t), 'Latin name, any case, deletes';
+
+  insert into products (slug, name, name_ar, active) values ('tmp-blank-ar', 'Blank AR', '', true) returning id into v_t;
+  set local role authenticated;
+  begin
+    perform admin_delete_product(v_t, '');
+    assert false, 'empty string must never match an empty name_ar';
+  exception when others then
+    assert sqlerrm = 'CONFIRMATION_MISMATCH', 'empty vs empty name_ar: ' || sqlerrm;
+  end;
+  reset role;
+  assert exists (select 1 from products where id = v_t), 'product kept';
+
+  perform set_config('request.jwt.claim.sub', '', true);
+  raise notice 'PART 9 (permanent product deletion): ALL ASSERTIONS PASSED';
+end $$;
+
 select 'DB ASSERTIONS PASSED' as result;

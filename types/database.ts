@@ -531,6 +531,7 @@ export interface Database {
         Args: { p_variant_id: string; p_change: number; p_reason: InventoryReason; p_note?: string | null };
         Returns: number;
       };
+      admin_delete_product: { Args: { p_product_id: string; p_confirm_name: string }; Returns: Json };
       admin_dashboard_metrics: { Args: Record<string, never>; Returns: Json };
       admin_sales_series: { Args: { p_days?: number }; Returns: Json };
       admin_top_products: { Args: { p_limit?: number }; Returns: Json };

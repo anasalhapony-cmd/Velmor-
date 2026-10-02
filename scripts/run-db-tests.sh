@@ -124,4 +124,61 @@ else
   echo "==> IDEMPOTENCY RACE TEST FAILED"; exit 1
 fi
 
+echo "==> Concurrency: permanent delete vs. 6 buyers of the same perfume, 12 rounds (never both)"
+OWNER=$($PSQL -tAc "select id from admin_users where role='owner' limit 1;")
+DEL_WON=0; ORD_WON=0; BAD=0
+for round in $(seq 1 12); do
+  SLUG="del-race-$round"
+  VID=$($PSQL -tAc "
+    with p as (insert into products(slug,name,name_ar,active) values('$SLUG','DELRACE$round','عطر سباق $round',true) returning id),
+         v as (insert into product_variants(product_id,size,unit,price,stock_quantity)
+               select p.id, 50,'ml', 100, 20 from p returning id)
+    select id from v;")
+  PID=$($PSQL -tAc "select id from products where slug='$SLUG';")
+  # Everyone waits for the same instant, so the deleter and the buyers truly collide.
+  GO=$($PSQL -tAc "select clock_timestamp() + interval '0.6 seconds';")
+  WAIT="select pg_sleep(greatest(0, extract(epoch from ('$GO'::timestamptz - clock_timestamp()))));"
+  tmp=$(mktemp -d); pids=()
+  (
+    $PSQL -tAc "$WAIT select set_config('request.jwt.claim.sub','$OWNER',false); set role authenticated;
+                select admin_delete_product('$PID'::uuid, 'عطر سباق $round')->>'slug';" >"$tmp/del.out" 2>"$tmp/del.err" || true
+  ) &
+  pids+=($!)
+  for i in $(seq 1 6); do
+    (
+      $PSQL -tAc "$WAIT select (create_order(jsonb_build_object(
+          'customer_name','dr$i','phone','21893300$round$i','city','x','address','a',
+          'delivery_zone_id',(select id from delivery_zones limit 1),
+          'items', jsonb_build_array(jsonb_build_object('variant_id','$VID'::uuid,'quantity',1))
+        ), 'delrace-$round-$i'))->>'order_number';" >"$tmp/ord.$i" 2>"$tmp/ord.err.$i" || true
+    ) &
+    pids+=($!)
+  done
+  for pid in "${pids[@]}"; do wait "$pid"; done
+
+  DELETED=$(grep -c "$SLUG" "$tmp/del.out" || true)
+  ORDERS=$($PSQL -tAc "select count(distinct order_id) from order_items where product_name_snapshot = 'عطر سباق $round';")
+  EXISTS=$($PSQL -tAc "select count(*) from products where slug='$SLUG';")
+  STOCK=$($PSQL -tAc "select coalesce((select stock_quantity from product_variants where id='$VID'::uuid), -1);")
+  DEADLOCK=$(cat "$tmp"/*.err "$tmp"/ord.err.* 2>/dev/null | grep -ci 'deadlock' || true)
+  rm -rf "$tmp"
+
+  if [ "$DEADLOCK" != "0" ]; then echo "    round $round: DEADLOCK"; BAD=$((BAD+1)); fi
+  if [ "$DELETED" = "1" ]; then
+    # deleted -> the product is gone and no buyer got an order through
+    if [ "$EXISTS" != "0" ] || [ "$ORDERS" != "0" ]; then echo "    round $round: deleted but exists=$EXISTS orders=$ORDERS"; BAD=$((BAD+1)); fi
+    DEL_WON=$((DEL_WON+1))
+  else
+    # refused -> the product is intact and stock matches the orders that did go through
+    if [ "$EXISTS" != "1" ] || [ "$STOCK" != "$((20-ORDERS))" ]; then echo "    round $round: refused but exists=$EXISTS stock=$STOCK orders=$ORDERS"; BAD=$((BAD+1)); fi
+    ORD_WON=$((ORD_WON+1))
+  fi
+done
+echo "    delete won: $DEL_WON rounds, buyers won: $ORD_WON rounds, violations: $BAD (expected 0)"
+if [ "$BAD" = "0" ]; then
+  echo "==> DELETE-vs-ORDER RACE TEST PASSED (no order for a deleted perfume, no half-deleted state)"
+else
+  echo "==> DELETE-vs-ORDER RACE TEST FAILED"; exit 1
+fi
+
 echo "==> ALL DB TESTS PASSED"

@@ -251,6 +251,13 @@ export const inventoryAdjustSchema = z.object({
 });
 export type InventoryAdjustInput = z.infer<typeof inventoryAdjustSchema>;
 
+/** Permanent perfume deletion (the typed name is re-checked by the database). */
+export const productDeleteSchema = z.object({
+  product_id: z.string().uuid(),
+  confirm_name: z.string().trim().min(1, 'اكتب اسم العطر للتأكيد').max(200),
+});
+export type ProductDeleteInput = z.infer<typeof productDeleteSchema>;
+
 // --- Admin accounts ---------------------------------------------------------
 
 export const adminAccountSchema = z.object({

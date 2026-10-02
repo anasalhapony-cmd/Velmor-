@@ -31,7 +31,7 @@ declare module 'react' {
   export function createContext<T>(v: T): { Provider: (p: any) => any; Consumer: (p: any) => any };
   export function useContext<T = unknown>(c: unknown): T;
   export function useState<T = unknown>(v?: T): [T, (x: T | ((prev: T) => T)) => void];
-  export function useActionState<S = unknown>(a: unknown, s: S): [S, (fd: unknown) => void];
+  export function useActionState<S = unknown>(a: unknown, s: S): [S, (fd: unknown) => void, boolean];
   export function useId(): string;
   export function useRef<T>(v: T): { current: T };
   export function useRef<T>(v: T | null): { current: T | null };

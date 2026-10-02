@@ -53,7 +53,7 @@ cp .env.example .env.local     # then fill in the values (see below)
 The schema lives in `supabase/migrations/` (ordered, reproducible). Apply it to your Supabase DB:
 
 ```bash
-npm run db:migrate      # applies 0001 … 0022 (tracked in schema_migrations; safe to re-run)
+npm run db:migrate      # applies 0001 … 0023 (tracked in schema_migrations; safe to re-run)
 npm run db:seed         # DEV sample catalogue — REQUIRED to see the homepage as designed (5 perfumes, families, copy)
 ```
 
@@ -67,6 +67,7 @@ npm run db:seed         # DEV sample catalogue — REQUIRED to see the homepage 
 | `0017` | adds the `admin` role (must run in its own transaction) |
 | `0018` | Phase 2 commerce: stock reservations, status state machine + history, auto-expiry, gift-wrap architecture (off), `create_order` v3 (anti-hoarding caps, zone-derived city, advisory-locked idempotency), `quote_order_v2`, durable rate limits, catalogue browse v2, design homepage sections |
 | `0019` | **privilege lockdown** — revokes Supabase's default EXECUTE/ALL grants and re-grants an explicit allowlist (mandatory) |
+| `0023` | `admin_delete_product` — **permanent perfume deletion** (owner/admin only, typed-name confirmation, refuses while orders are open, audit snapshot) |
 | `0022` | creates the public `product-images` storage bucket (5 MB, images only) |
 | `0021` | storefront copy setting (`delivery_tagline`, approved wording) |
 | `0020` | **RLS per permission** — staff JWTs can only write the tables their permission owns; ledgers are RPC-only; prices need `manage_prices`; stock changes only via the ledger |
@@ -147,8 +148,10 @@ npm run typecheck:offline  # optional: type-check the admin against stubs WITHOU
 
 `tests/db/assertions.sql` verifies business logic, RLS, per-permission policies, the privilege surface
 (an exhaustive allowlist check) and anti-hoarding limits on a real Postgres; `scripts/run-db-tests.sh`
-adds three concurrency races: 20 buyers for the last unit (no oversell), 20 buyers for a single-use
-coupon (limit holds), 10 simultaneous submits with one idempotency key (exactly one order). They run
+adds four concurrency races: 20 buyers for the last unit (no oversell), 20 buyers for a single-use
+coupon (limit holds), 10 simultaneous submits with one idempotency key (exactly one order), and a
+permanent delete colliding with buyers of the same perfume (never both: either the perfume is gone and
+no order slipped in, or the delete is refused and stock is intact). They run
 against a local Postgres using `scripts/_local_supabase_shim.sql`, which recreates the objects Supabase
 provides **including its default privileges**, so the privilege tests see the real attack surface.
 
@@ -188,6 +191,12 @@ Role-based (owner / admin / manager / staff) with granular permissions, enforced
 - **Products** — multi-section editor: info, fragrance profile, variants, notes (pyramid), images (upload
   or URL), categories/collections, SEO, visibility. Archive (soft-delete) preserves order history.
 - **Inventory** — stock adjustments through a single ledgered choke point; full movement history.
+  **Permanent delete** ("حذف نهائي", owner / admin only): removes a perfume from the whole site — its sizes,
+  photos, notes, reviews, wishlist entries, stock ledger and homepage pointer — after the owner types its
+  name. Refused while any order for it is still open (new → out for delivery) or stock is reserved. Past
+  orders are kept untouched (they snapshot the name, size, price and photo). Photo files are then removed
+  from Storage unless an old order or another page still shows them. A full snapshot is written to the
+  audit log. Use **Archive** instead when the perfume might come back.
 - **Taxonomy** — brands, categories (hierarchical), collections, fragrance families, notes.
 - **Coupons** (scope by product/category/brand) & **Promotions**.
 - **Reviews** moderation (pending/approved/rejected; ratings roll up from approved only).

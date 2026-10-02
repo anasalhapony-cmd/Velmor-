@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { Search, History } from 'lucide-react';
+import { Search, History, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { requirePermission } from '@/lib/admin/auth';
 import { createClient } from '@/lib/supabase/server';
+import { FULL_ACCESS_ROLES } from '@/lib/admin/permissions';
 import { PageHeader, EmptyState, Badge, Pager } from '@/components/admin/ui';
 import { EntityForm, NumberField, SelectField, TextField } from '@/components/admin/form';
+import { DeleteProductDialog } from '@/components/admin/DeleteProductDialog';
 import { stockLevel, STOCK_LEVEL_LABELS_AR } from '@/config/constants';
-import { adjustStock } from './actions';
+import { adjustStock, deleteProductPermanently } from './actions';
 
 const PER_PAGE = 30;
 
@@ -19,9 +21,11 @@ const REASONS = [
 export default async function InventoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; filter?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; filter?: string; page?: string; deleted?: string; leftover?: string }>;
 }) {
-  await requirePermission('manage_inventory');
+  const me = await requirePermission('manage_inventory');
+  // Permanent deletion is for owners / admins only (the database enforces it too).
+  const canDelete = FULL_ACCESS_ROLES.includes(me.role);
   const sp = await searchParams;
   const q = (sp.q ?? '').trim();
   const filter = sp.filter ?? 'all';
@@ -58,7 +62,26 @@ export default async function InventoryPage({
   const { data: products } = pIds.length
     ? await supabase.from('products').select('id, name, name_ar').in('id', pIds)
     : { data: [] as { id: string; name: string; name_ar: string | null }[] };
-  const pName = new Map((products ?? []).map((p) => [p.id, p.name_ar || p.name]));
+  const pName = new Map<string, string>((products ?? []).map((p) => [p.id, p.name_ar || p.name]));
+  // Other accepted spelling (Latin name) — the database accepts either when confirming.
+  const pAlt = new Map<string, string | null>(
+    (products ?? []).map((p) => [p.id, p.name_ar && p.name !== p.name_ar ? p.name : null])
+  );
+
+  // For the delete dialog: ALL sizes of each perfume (the list above may show only some of them).
+  const totals = new Map<string, { sizes: number; stock: number }>();
+  if (canDelete && pIds.length) {
+    const { data: all } = await supabase.from('product_variants').select('product_id, stock_quantity').in('product_id', pIds);
+    for (const r of all ?? []) {
+      const t = totals.get(r.product_id) ?? { sizes: 0, stock: 0 };
+      t.sizes += 1;
+      t.stock += r.stock_quantity;
+      totals.set(r.product_id, t);
+    }
+  }
+  const back = new URLSearchParams({ q, filter, page: String(page) }).toString();
+  const deleted = (sp.deleted ?? '').slice(0, 80);
+  const leftover = Number.parseInt(sp.leftover ?? '', 10);
 
   const total = count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
@@ -67,6 +90,21 @@ export default async function InventoryPage({
   return (
     <div>
       <PageHeader title="المخزون" description={`${total} مقاس`} />
+
+      {deleted && (
+        <div className="mb-5 space-y-2" role="status">
+          <div className="flex items-center gap-2 rounded border border-success/30 bg-success/5 px-4 py-3 text-sm text-success">
+            <CheckCircle2 size={16} />
+            {deleted === '1' ? 'تم حذف العطر نهائيًا من الموقع.' : `تم حذف «${deleted}» نهائيًا من الموقع والمخزون.`}
+          </div>
+          {Number.isFinite(leftover) && leftover > 0 && (
+            <div className="flex items-center gap-2 rounded border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink">
+              <AlertTriangle size={16} className="text-warning" />
+              تعذّر حذف {leftover} ملف صورة من التخزين. العطر نفسه حُذف؛ يمكنك حذف الملفات يدويًا من Supabase ← Storage.
+            </div>
+          )}
+        </div>
+      )}
 
       <form className="mb-5 flex flex-wrap items-center gap-2" action="/admin/inventory">
         <div className="relative flex-1 min-w-[200px]">
@@ -117,6 +155,17 @@ export default async function InventoryPage({
                             </EntityForm>
                           </div>
                         </details>
+                        {canDelete && (
+                          <DeleteProductDialog
+                            action={deleteProductPermanently}
+                            productId={v.product_id}
+                            productName={pName.get(v.product_id) ?? ''}
+                            altName={pAlt.get(v.product_id) ?? null}
+                            sizes={totals.get(v.product_id)?.sizes ?? 1}
+                            stock={totals.get(v.product_id)?.stock ?? v.stock_quantity}
+                            back={back}
+                          />
+                        )}
                       </div>
                     </td>
                   </tr>
